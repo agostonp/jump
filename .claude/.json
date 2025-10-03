@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npx playwright test:*)",
+      "mcp__playwright__browser_press_key"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
