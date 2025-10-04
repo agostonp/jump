@@ -35,7 +35,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({ onMove, disabled
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 mt-4 md:hidden">
+    <div className="flex flex-col items-center gap-2 mt-4 lg:hidden">
       <div className="flex justify-center">
         <button
           className={buttonClass}

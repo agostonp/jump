@@ -231,6 +231,7 @@ export class GameEngine {
 
   restart(): void {
     this.state = this.createInitialState();
+    this.state.status = 'playing';
     this.lastTurnTime = 0;
   }
 
