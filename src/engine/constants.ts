@@ -1,3 +1,5 @@
+import { LeafProbabilityUpperLimits } from "./types";
+
 // Game configuration - easily modifiable
 export const GRID_SIZE = 8;
 export const INITIAL_LIVES = 5;
@@ -13,3 +15,17 @@ export const SINK_INTERVAL = 1000 / SINK_RATE; // ms per level
 
 // Cell size for rendering
 export const CELL_SIZE = 60; // pixels
+
+export const LEVEL_1_DYNAMICS: LeafProbabilityUpperLimits = {
+  full: 0.03, // 3% chance to grow to full height
+  high: 0.09, // 6% chance to grow
+  low: 0.15, // 6% chance to sink
+  food: 0.17, // 2% chance for food to appear
+};
+
+export const LEVEL_1_START: LeafProbabilityUpperLimits = {
+  full: 0.40,
+  high: 0.65,
+  low: 0.80,
+  food: 0.12,
+};

@@ -3,6 +3,7 @@ import { GameState } from '../engine/types';
 import { GRID_SIZE, CELL_SIZE } from '../engine/constants';
 import { Bird } from './Bird';
 import { Leaf } from './Leaf';
+import { positionToIndex } from '../utils/leafManager';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -10,14 +11,6 @@ interface GameBoardProps {
 
 export const GameBoard: React.FC<GameBoardProps> = ({ gameState }) => {
   const boardSize = GRID_SIZE * CELL_SIZE;
-
-  // Create a map of leaf positions for quick lookup
-  const leafMap = new Map(
-    gameState.leaves.map((leaf) => [
-      `${leaf.position.x},${leaf.position.y}`,
-      leaf,
-    ])
-  );
 
   return (
     <div
@@ -30,7 +23,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState }) => {
       {/* Render grid */}
       {Array.from({ length: GRID_SIZE }).map((_, y) =>
         Array.from({ length: GRID_SIZE }).map((_, x) => {
-          const leaf = leafMap.get(`${x},${y}`);
+          const index = positionToIndex({x, y});
+          const leaf = gameState.leaves[index];
           const isBirdHere =
             gameState.bird.position.x === x && gameState.bird.position.y === y;
 

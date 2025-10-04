@@ -1,23 +1,22 @@
-import { GameState, Position, Leaf, Direction } from './types';
+import { GameState, Position, Leaf, Direction, LeafProbabilityUpperLimits } from './types';
 import {
   GRID_SIZE,
   INITIAL_LIVES,
   LEAF_LEVELS,
-  SINK_INTERVAL,
+  LEVEL_1_DYNAMICS,
+  LEVEL_1_START,
 } from './constants';
 import {
-  createInitialLeaves,
-  getRandomPosition,
-  getRandomRespawnTime,
+  indexToPosition,
   positionsEqual,
-  isAdjacent,
+  positionToIndex,
+  nearestLeaf,
 } from '../utils/leafManager';
 import { soundManager } from '../utils/soundManager';
 
 export class GameEngine {
   private state: GameState;
-  private pendingRespawns: Array<{ time: number; count: number }> = [];
-  private lastTurnTime: number = Date.now();
+  private lastTurnTime: number = 0;
   private readonly TURN_DURATION = 1000; // 1 second per turn
 
   constructor() {
@@ -25,20 +24,23 @@ export class GameEngine {
   }
 
   private createInitialState(): GameState {
-    const leaves = createInitialLeaves();
+  
+    const leaves = this.initializeLeaves(LEVEL_1_START);
 
     // Find a leaf to place the bird on (prefer one without food)
-    let birdLeaf = leaves.find((leaf) => !leaf.hasFood) || leaves[0];
-    birdLeaf.lastSteppedOn = Date.now();
-
+    let birdPosition = nearestLeaf(leaves, { x: 0, y: 0 }, (leaf) => leaf.heightLevel === LEAF_LEVELS && !leaf.hasFood)
+    if (!birdPosition) {
+      birdPosition = nearestLeaf(leaves, { x: 0, y: 0 }, (leaf) => leaf.heightLevel > 0) || { x: 0, y: 0 };
+    }
+    
     return {
       bird: {
-        position: { ...birdLeaf.position },
+        position: { ...birdPosition },
       },
       leaves,
       score: 0,
       lives: INITIAL_LIVES,
-      status: 'playing',
+      status: 'startScreen',
       lastUpdateTime: Date.now(),
     };
   }
@@ -71,25 +73,16 @@ export class GameEngine {
 
     // Check if position changed (hit boundary)
     if (positionsEqual(currentPos, newPos)) return false;
-
-    // Find current leaf and mark it for emerging
-    const currentLeaf = this.state.leaves.find((leaf) =>
-      positionsEqual(leaf.position, currentPos)
-    );
-    if (currentLeaf) {
-      currentLeaf.lastSteppedOn = Date.now();
-    }
+    console.log(`Bird moves ${direction} to (${newPos.x},${newPos.y})`);
 
     // Move bird to new position (can move anywhere)
     this.state.bird.position = newPos;
 
     // Find leaf at new position
-    const targetLeaf = this.state.leaves.find((leaf) =>
-      positionsEqual(leaf.position, newPos)
-    );
+    const targetLeaf = this.state.leaves[positionToIndex(newPos)];
 
-    // Check if there's no leaf or leaf is fully sunk - lose life immediately
-    if (!targetLeaf || targetLeaf.heightLevel === 0) {
+    // Check if leaf is fully sunk - lose life immediately
+    if (targetLeaf.heightLevel === 0) {
       this.loseLife();
       return true;
     }
@@ -100,9 +93,10 @@ export class GameEngine {
     // Check for food collection
     if (targetLeaf.hasFood) {
       targetLeaf.hasFood = false;
-      this.state.score += 10;
+      this.state.score += 20;
       soundManager.collectFood();
     } else {
+      this.state.score += 1;
       soundManager.jump();
     }
 
@@ -130,149 +124,82 @@ export class GameEngine {
     // 1. Update leaves (sink/emerge/random changes)
     this.updateLeaves(currentTime);
 
-    // 2. Check pending respawns
-    this.processPendingRespawns(currentTime);
-
-    // 3. Check if bird is on a valid leaf
-    this.checkBirdStatus();
   }
 
   private updateLeaves(currentTime: number): void {
     const birdPos = this.state.bird.position;
-    const leavesToRemove: number[] = [];
 
     this.state.leaves.forEach((leaf, index) => {
-      // Leaves with food don't sink or change
-      if (leaf.hasFood) {
-        leaf.heightLevel = LEAF_LEVELS;
-        return;
-      }
+      const leafPos = indexToPosition(index);
 
-      const isBirdOnLeaf = positionsEqual(leaf.position, birdPos);
+      const isBirdOnLeaf = positionsEqual(leafPos, birdPos);
 
       if (isBirdOnLeaf) {
         // Bird is on this leaf - it SINKS one level per turn
         if (leaf.heightLevel > 0) {
-          console.log(`Bird on leaf at (${leaf.position.x},${leaf.position.y}), sinking from ${leaf.heightLevel} to ${leaf.heightLevel - 1}`);
+          console.log(`Bird on leaf at (${leafPos.x},${leafPos.y}), sinking from ${leaf.heightLevel} to ${leaf.heightLevel - 1}`);
           leaf.heightLevel--;
 
-          if (leaf.heightLevel === 1) {
-            soundManager.leafSinking();
+          if (leaf.heightLevel === 0) {
+            this.loseLife();
           }
         }
-
-        // DON'T remove the leaf while bird is on it
-        // Let checkBirdStatus handle life loss when it reaches 0
       } else {
         // Bird is NOT on this leaf
 
-        // Check if bird was recently on it (bird just left)
-        if (leaf.lastSteppedOn > 0) {
-          // Bird just left - leaf emerges back to full height
+        const leafFate = Math.random(); 
+        if(leafFate <= LEVEL_1_DYNAMICS.full) {
           leaf.heightLevel = LEAF_LEVELS;
-          leaf.lastSteppedOn = 0; // Reset flag
-        } else {
-          // Random sporadic leaf dynamics (15% chance per turn to change)
-          // Only for leaves not at max or min level
-          if (Math.random() < 0.15 && leaf.heightLevel > 0 && leaf.heightLevel < LEAF_LEVELS) {
-            const oldLevel = leaf.heightLevel;
-            // 60% chance to sink, 40% chance to emerge (slight bias toward sinking for difficulty)
-            if (Math.random() < 0.6) {
-              leaf.heightLevel = Math.max(1, leaf.heightLevel - 1);
-            } else {
-              leaf.heightLevel = Math.min(LEAF_LEVELS, leaf.heightLevel + 1);
-            }
-            console.log(`Random change at (${leaf.position.x},${leaf.position.y}): ${oldLevel} -> ${leaf.heightLevel}`);
+          console.log(`Leaf at (${leafPos.x},${leafPos.y}) grows to full height: ${leaf.heightLevel}`);
+        } else if(leafFate <= LEVEL_1_DYNAMICS.high) {
+          if(leaf.heightLevel < LEAF_LEVELS) {
+            leaf.heightLevel++;
+            console.log(`Leaf at (${leafPos.x},${leafPos.y}) grows: ${leaf.heightLevel}`);
           }
-
-          // 8% chance per turn for fully emerged leaf to start sinking
-          if (Math.random() < 0.08 && leaf.heightLevel === LEAF_LEVELS) {
-            leaf.heightLevel = LEAF_LEVELS - 1;
-            console.log(`Leaf at (${leaf.position.x},${leaf.position.y}) starting to sink: ${LEAF_LEVELS} -> ${leaf.heightLevel}`);
+        } else if(leafFate <= LEVEL_1_DYNAMICS.low) {
+          if(leaf.heightLevel > 0 && !leaf.hasFood) {
+            leaf.heightLevel--;
+            console.log(`Leaf at (${leafPos.x},${leafPos.y}) sinks: ${leaf.heightLevel}`);
           }
-
-          // 10% chance per turn for level 1 leaf to sink completely
-          if (Math.random() < 0.10 && leaf.heightLevel === 1) {
-            leaf.heightLevel = 0;
-            console.log(`Leaf at (${leaf.position.x},${leaf.position.y}) sinking completely: 1 -> 0`);
-          }
-
-          // Mark fully sunk leaves (not stepped on by bird) for removal
-          if (leaf.heightLevel === 0) {
-            leavesToRemove.push(index);
+        } else if(leafFate <= LEVEL_1_DYNAMICS.food) {
+          if(leaf.heightLevel > 0 && !leaf.hasFood) {
+            leaf.hasFood = true;
+            console.log(`Food appears on leaf at (${leafPos.x},${leafPos.y})`);
           }
         }
+        // Otherwise, leaf remains the same
       }
     });
+  }
 
-    // Remove fully sunk leaves and schedule respawns
-    if (leavesToRemove.length > 0) {
-      console.log(`Removing ${leavesToRemove.length} fully sunk leaves`);
-      // Remove from end to start to maintain indices
-      for (let i = leavesToRemove.length - 1; i >= 0; i--) {
-        this.state.leaves.splice(leavesToRemove[i], 1);
+  private initializeLeaves(leafProbabilities: LeafProbabilityUpperLimits): Leaf[] {
+
+    const totalCells = GRID_SIZE * GRID_SIZE;
+    const leaves: Leaf[] = [];
+
+    for (let i = 0; i < totalCells; i++) {
+      const leaf: Leaf = { heightLevel: 0, hasFood: false };
+      const leafFate = Math.random(); 
+      if(leafFate <= leafProbabilities.full) {
+        leaf.heightLevel = 3;
+      } else if(leafFate <= leafProbabilities.high) {
+          leaf.heightLevel = 2;
+      } else if(leafFate <= leafProbabilities.low) {
+          leaf.heightLevel = 1;
+      } else {
+          leaf.heightLevel = 0;
       }
 
-      // Schedule respawn for each removed leaf
-      leavesToRemove.forEach(() => {
-        const respawnTime = currentTime + getRandomRespawnTime();
-        console.log(`Scheduling respawn at ${respawnTime} (in ${getRandomRespawnTime()}ms)`);
-        this.pendingRespawns.push({
-          time: respawnTime,
-          count: 1,
-        });
-      });
-    }
-  }
-
-  private processPendingRespawns(currentTime: number): void {
-    const respawnsToProcess = this.pendingRespawns.filter(
-      (r) => r.time <= currentTime
-    );
-
-    if (respawnsToProcess.length > 0) {
-      console.log(`Processing ${respawnsToProcess.length} respawns`);
-    }
-
-    respawnsToProcess.forEach((respawn) => {
-      // Get existing positions
-      const existingPositions = new Set(
-        this.state.leaves.map((leaf) => `${leaf.position.x},${leaf.position.y}`)
-      );
-
-      // Add new leaves
-      for (let i = 0; i < respawn.count; i++) {
-        const position = getRandomPosition(existingPositions);
-        existingPositions.add(`${position.x},${position.y}`);
-
-        console.log(`Respawning leaf at (${position.x},${position.y})`);
-        this.state.leaves.push({
-          position,
-          heightLevel: LEAF_LEVELS,
-          hasFood: false,
-          lastSteppedOn: 0,
-          sinkStartTime: currentTime,
-        });
+      const foodFate = Math.random(); 
+      if(leaf.heightLevel > 0 && foodFate <= leafProbabilities.food) {
+        leaf.hasFood = true;
       }
-    });
 
-    // Remove processed respawns
-    this.pendingRespawns = this.pendingRespawns.filter(
-      (r) => r.time > currentTime
-    );
-  }
-
-  private checkBirdStatus(): void {
-    const birdPos = this.state.bird.position;
-    const currentLeaf = this.state.leaves.find((leaf) =>
-      positionsEqual(leaf.position, birdPos)
-    );
-
-    // Bird fell (leaf fully sunk while bird was on it)
-    if (currentLeaf && currentLeaf.heightLevel === 0) {
-      this.loseLife();
+      leaves.push(leaf);
     }
-  }
+
+    return leaves;
+  }        
 
   private loseLife(): void {
     this.state.lives--;
@@ -290,25 +217,26 @@ export class GameEngine {
   continueAfterLifeLoss(): void {
     if (this.state.status !== 'lifeLost') return;
 
-    // Respawn bird on a random leaf with full height
-    const validLeaves = this.state.leaves.filter(
-      (leaf) => leaf.heightLevel === LEAF_LEVELS && !leaf.hasFood
-    );
-
-    if (validLeaves.length > 0) {
-      const respawnLeaf =
-        validLeaves[Math.floor(Math.random() * validLeaves.length)];
-      this.state.bird.position = { ...respawnLeaf.position };
+    // Find a leaf to place the bird on (prefer one without food)
+    let birdPosition = nearestLeaf(this.state.leaves, this.state.bird.position, (leaf) => leaf.heightLevel === LEAF_LEVELS && !leaf.hasFood)
+    if (!birdPosition) {
+      birdPosition = nearestLeaf(this.state.leaves, this.state.bird.position, (leaf) => leaf.heightLevel > 0) || this.state.bird.position;
     }
+    this.state.bird.position = { ...birdPosition };
 
     // Resume game and reset turn timer
     this.state.status = 'playing';
-    this.lastTurnTime = Date.now();
+    this.lastTurnTime = 0;
   }
 
   restart(): void {
     this.state = this.createInitialState();
-    this.pendingRespawns = [];
-    this.lastTurnTime = Date.now();
+    this.lastTurnTime = 0;
+  }
+
+  startGame(): void {
+    if (this.state.status !== 'startScreen') return;
+    this.state.status = 'playing';
+    this.lastTurnTime = 0;
   }
 }

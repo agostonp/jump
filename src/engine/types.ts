@@ -4,11 +4,8 @@ export interface Position {
 }
 
 export interface Leaf {
-  position: Position;
   heightLevel: number; // 0 = fully sunk, 1-3 = visible
   hasFood: boolean;
-  lastSteppedOn: number; // timestamp
-  sinkStartTime: number; // timestamp when sinking started
 }
 
 export interface Bird {
@@ -20,8 +17,16 @@ export interface GameState {
   leaves: Leaf[];
   score: number;
   lives: number;
-  status: 'playing' | 'gameOver' | 'lifeLost';
+  status: 'startScreen' | 'playing' | 'gameOver' | 'lifeLost';
   lastUpdateTime: number;
 }
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
+
+export interface LeafProbabilityUpperLimits {
+  full: number; // Upper limit of Probability of a leaf on max height
+  high: number; // Upper limit of Probability of a leaf growing / on level 2
+  low: number; // Upper limit of Probability of a leaf sinking / on level 1
+  food: number; // Upper limit of Probability of food on a leaf
+}
+

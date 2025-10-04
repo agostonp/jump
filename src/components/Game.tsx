@@ -5,6 +5,7 @@ import { GameBoard } from './GameBoard';
 import { HUD } from './HUD';
 import { GameOver } from './GameOver';
 import { LifeLostModal } from './LifeLostModal';
+import { StartScreen } from './StartScreen';
 import { useGameLoop } from '../hooks/useGameLoop';
 
 export const Game: React.FC = () => {
@@ -65,6 +66,11 @@ export const Game: React.FC = () => {
     setGameState(engineRef.current.getState());
   };
 
+  const handleStart = () => {
+    engineRef.current.startGame();
+    setGameState(engineRef.current.getState());
+  };
+
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -75,9 +81,12 @@ export const Game: React.FC = () => {
   useGameLoop(updateGame, gameState.status === 'playing');
 
   return (
-    <div className="relative">
+    <div className="flex flex-col gap-4">
       <HUD score={gameState.score} lives={gameState.lives} />
       <GameBoard gameState={gameState} />
+      {gameState.status === 'startScreen' && (
+        <StartScreen onStart={handleStart} />
+      )}
       {gameState.status === 'lifeLost' && (
         <LifeLostModal
           livesRemaining={gameState.lives}

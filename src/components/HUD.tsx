@@ -7,7 +7,7 @@ interface HUDProps {
 
 export const HUD: React.FC<HUDProps> = ({ score, lives }) => {
   return (
-    <div className="absolute top-4 left-4 right-4 flex justify-between text-white text-xl font-bold">
+    <div className="flex justify-between text-white text-xl font-bold">
       <div className="bg-black bg-opacity-50 px-4 py-2 rounded">
         Score: {score}
       </div>
