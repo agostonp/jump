@@ -6,6 +6,7 @@ import { HUD } from './HUD';
 import { GameOver } from './GameOver';
 import { LifeLostModal } from './LifeLostModal';
 import { StartScreen } from './StartScreen';
+import { MobileControls } from './MobileControls';
 import { useGameLoop } from '../hooks/useGameLoop';
 
 export const Game: React.FC = () => {
@@ -71,6 +72,14 @@ export const Game: React.FC = () => {
     setGameState(engineRef.current.getState());
   };
 
+  const handleMove = (direction: Direction) => {
+    if (gameState.status !== 'playing') return;
+    const moved = engineRef.current.moveBird(direction);
+    if (moved) {
+      setGameState(engineRef.current.getState());
+    }
+  };
+
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -81,9 +90,13 @@ export const Game: React.FC = () => {
   useGameLoop(updateGame, gameState.status === 'playing');
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 w-full max-w-full">
       <HUD score={gameState.score} lives={gameState.lives} />
       <GameBoard gameState={gameState} />
+      <MobileControls
+        onMove={handleMove}
+        disabled={gameState.status !== 'playing'}
+      />
       {gameState.status === 'startScreen' && (
         <StartScreen onStart={handleStart} />
       )}

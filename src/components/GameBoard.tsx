@@ -14,10 +14,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState }) => {
 
   return (
     <div
-      className="relative bg-blue-500 rounded-lg shadow-2xl overflow-hidden"
+      className="relative bg-blue-500 rounded-lg shadow-2xl overflow-hidden mx-auto w-full max-w-[480px] aspect-square"
       style={{
-        width: boardSize,
-        height: boardSize,
+        maxWidth: boardSize,
       }}
     >
       {/* Render grid */}
@@ -33,10 +32,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState }) => {
               key={`${x},${y}`}
               className="absolute border border-blue-300 border-opacity-20"
               style={{
-                left: x * CELL_SIZE,
-                top: y * CELL_SIZE,
-                width: CELL_SIZE,
-                height: CELL_SIZE,
+                left: `${(x / GRID_SIZE) * 100}%`,
+                top: `${(y / GRID_SIZE) * 100}%`,
+                width: `${(1 / GRID_SIZE) * 100}%`,
+                height: `${(1 / GRID_SIZE) * 100}%`,
                 backgroundColor: 'transparent',
               }}
             >
